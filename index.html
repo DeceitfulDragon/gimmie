@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#dbe1e4" />
+
+  <meta name="description" content="gimmie. want it? list it. Keep track of the things you want." />
+
+  <title>gimmie. want it? list it.</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Figtree:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+
+  <script>
+    try {
+      if (localStorage.getItem('gimmie-theme') === 'dark') {
+        document.documentElement.dataset.theme = 'dark'
+
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute('content', '#142238')
+      }
+    } catch { }
+  </script>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
