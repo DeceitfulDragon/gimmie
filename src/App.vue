@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+
+import NewWishlistForm from '@/components/NewWishlistForm.vue'
+import { useWishlistStore } from '@/stores/wishlists'
+import { getTabTextColor } from '@/utils/listColors'
+
+import type { NewWishlist } from '@/stores/wishlists'
 
 /* === THEME === */
 
@@ -52,9 +59,12 @@ const notes = [
     'Maybe next payday.',
     'Wait for a sale.',
     'Sleep on it.',
+    'Do I really need another one?',
     'Save the link this time.',
-    'Still thinking on it.',
+    'Still thinking about it.',
+    'Check the measurements first.',
     'That can stay on the list.',
+    'Maybe ask for it for my birthday.',
     'One thing at a time.'
 ]
 
@@ -62,50 +72,26 @@ const currentNote = notes[Math.floor(Math.random() * notes.length)]!
 
 /* === WISHLISTS === */
 
-type WishColor = 'blue' | 'gold' | 'peach' | 'mint' | 'lilac'
-type TabTone = 'blue' | 'gold' | 'rust'
+const wishlistStore = useWishlistStore()
+const { wishlists, activeList } = storeToRefs(wishlistStore)
 
-interface Wish {
-    id: string
-    name: string
-    description: string
-    price: string
-    sticker: string
-    icon: string
-    color: WishColor
-}
-
-interface Wishlist {
-    id: string
-    tabName: string
-    tabIcon: string
-    tabTone: TabTone
-    title: string
-    description: string
-    pageNumber: string
-    items: Wish[]
-}
-
-const wishlists = ref<Wishlist[]>([])
-
-/* === ACTIVE LIST === */
-
-const activeListId = ref<string | null>(null)
-
-const activeList = computed<Wishlist | null>(() => {
-    return (
-        wishlists.value.find((list) => list.id === activeListId.value) ??
-        wishlists.value[0] ??
-        null
-    )
-})
+const showNewList = ref(false)
 
 const listCount = computed(() => {
     return String(wishlists.value.length).padStart(2, '0')
 })
 
-function selectList(id: string) {
-    activeListId.value = id
+const pageNumber = computed(() => {
+    const index = wishlists.value.findIndex(
+        (list) => list.id === activeList.value?.id
+    )
+
+    return String(index + 1).padStart(2, '0')
+})
+
+function createList(input: NewWishlist) {
+    wishlistStore.createList(input)
+    showNewList.value = false
 }
 </script>
 
@@ -124,8 +110,8 @@ function selectList(id: string) {
                 </div>
 
                 <button type="button" class="theme-toggle" :aria-pressed="theme === 'dark'" :aria-label="theme === 'light'
-                    ? 'Switch to After Hours'
-                    : 'Switch to Daytime'
+                        ? 'Switch to After Hours'
+                        : 'Switch to Daytime'
                     " @click="toggleTheme">
                     <span class="theme-icon" aria-hidden="true">
                         {{ theme === 'light' ? '☾' : '☀' }}
@@ -162,19 +148,27 @@ function selectList(id: string) {
                 <section class="collection">
                     <div class="collection-label">
                         <span>MY LISTS / {{ listCount }}</span>
-                        <small v-if="wishlists.length > 0">Pick a list</small>
+
+                        <button type="button" class="theme-toggle" :aria-expanded="showNewList" :aria-controls="showNewList ? 'new-wishlist-form' : undefined
+                            " @click="showNewList = !showNewList">
+                            {{ showNewList ? 'Cancel' : '+ New list' }}
+                        </button>
                     </div>
+
+                    <NewWishlistForm v-if="showNewList" :dark="theme === 'dark'" @create="createList"
+                        @cancel="showNewList = false" />
 
                     <template v-if="activeList">
                         <nav class="list-tabs" aria-label="Wishlists">
-                            <button v-for="list in wishlists" :key="list.id" type="button" class="list-tab"
-                                :class="`list-tab--${list.tabTone}`" :aria-pressed="activeList.id === list.id"
-                                @click="selectList(list.id)">
+                            <button v-for="list in wishlists" :key="list.id" type="button" class="list-tab" :style="{
+                                backgroundColor: list.color,
+                                color: getTabTextColor(list.color)
+                            }" :aria-pressed="activeList.id === list.id" @click="wishlistStore.selectList(list.id)">
                                 <span aria-hidden="true">
-                                    {{ list.tabIcon }}
+                                    {{ list.icon }}
                                 </span>
 
-                                {{ list.tabName }}
+                                {{ list.name }}
                             </button>
                         </nav>
 
@@ -183,12 +177,15 @@ function selectList(id: string) {
                                 <div>
                                     <span class="overline">MY WISHLIST</span>
 
-                                    <h2>{{ activeList.title }}</h2>
-                                    <p>{{ activeList.description }}</p>
+                                    <h2>{{ activeList.name }}</h2>
+
+                                    <p v-if="activeList.description">
+                                        {{ activeList.description }}
+                                    </p>
                                 </div>
 
                                 <span class="page-number">
-                                    PAGE {{ activeList.pageNumber }}
+                                    PAGE {{ pageNumber }}
                                 </span>
                             </div>
 
@@ -198,10 +195,10 @@ function selectList(id: string) {
                                     things on this list
                                 </span>
 
-                                <span>{{ activeList.tabName }}</span>
+                                <span>{{ activeList.name }}</span>
                             </div>
 
-                            <div class="wish-grid">
+                            <div v-if="activeList.items.length > 0" class="wish-grid">
                                 <article v-for="wish in activeList.items" :key="wish.id" class="wish-card">
                                     <div class="wish-art" :class="`wish-art--${wish.color}`">
                                         <span class="wish-illustration" aria-hidden="true">
@@ -226,6 +223,12 @@ function selectList(id: string) {
                                     </div>
                                 </article>
                             </div>
+
+                            <div v-else class="list-empty">
+                                <span class="overline">EMPTY PAGE</span>
+                                <h3>Nothing here yet.</h3>
+                                <p>This page is waiting for its first wish.</p>
+                            </div>
                         </div>
                     </template>
 
@@ -240,11 +243,7 @@ function selectList(id: string) {
                             <span class="overline">FIRST PAGE</span>
 
                             <h2>Nothing here yet.</h2>
-
-                            <p>
-                                Fresh notebook, empty pages.
-                                List making is coming soon.
-                            </p>
+                            <p>Make a list to get started.</p>
                         </div>
                     </div>
                 </section>
@@ -256,3 +255,24 @@ function selectList(id: string) {
         </div>
     </div>
 </template>
+
+<style scoped>
+/* === EMPTY LIST === */
+
+.list-empty {
+    padding: 35px 0 18px;
+    text-align: center;
+}
+
+.list-empty h3 {
+    margin: 4px 0 9px;
+
+    font-size: 23px;
+    font-weight: 800;
+}
+
+.list-empty p {
+    color: var(--muted);
+    font-size: 13px;
+}
+</style>
