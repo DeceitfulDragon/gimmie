@@ -1,10 +1,8 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
-import {
-  DEFAULT_LIST_COLOR,
-  normalizeListColor
-} from '@/utils/listColors'
+import { normalizeListColor } from '@/utils/listColors'
+import { normalizeWebUrl } from '@/utils/urls'
 
 /* === TYPES === */
 
@@ -18,6 +16,17 @@ export interface Wish {
   sticker: string
   icon: string
   color: WishColor
+  url?: string
+  imageUrl?: string
+}
+
+export interface NewWish {
+  name: string
+  description: string
+  price: string
+  icon: string
+  url: string
+  imageUrl: string
 }
 
 export interface Wishlist {
@@ -49,11 +58,10 @@ type StoredWishlist = Omit<Wishlist, 'color'> & {
 /* === STORAGE === */
 
 const STORAGE_KEY = 'gimmie-wishlists-v2'
+const OLD_STORAGE_KEY = 'gimmie-wishlists-v1'
 
 function isWishlist(value: unknown): value is StoredWishlist {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
+  if (!value || typeof value !== 'object') return false
 
   const list = value as Partial<Wishlist>
 
@@ -67,37 +75,19 @@ function isWishlist(value: unknown): value is StoredWishlist {
 }
 
 function loadData(): SavedData {
-  const empty: SavedData = {
-    version: 2,
-    lists: [],
-    activeListId: null
-  }
+  const empty: SavedData = { version: 2, lists: [], activeListId: null }
 
   try {
-    const saved =
-      localStorage.getItem(STORAGE_KEY)
-
-    if (!saved) {
-      return empty
-    }
+    const saved = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(OLD_STORAGE_KEY)
+    if (!saved) return empty
 
     const data: unknown = JSON.parse(saved)
-
-    if (!data || typeof data !== 'object') {
-      return empty
-    }
+    if (!data || typeof data !== 'object') return empty
 
     const stored = data as Partial<SavedData>
-
-    if (
-      (stored.version !== 1 && stored.version !== 2) ||
-      !Array.isArray(stored.lists)
-    ) {
-      return empty
-    }
+    if ((stored.version !== 1 && stored.version !== 2) || !Array.isArray(stored.lists)) return empty
 
     const records: unknown[] = stored.lists
-
     const lists: Wishlist[] = records
       .filter(isWishlist)
       .map((list) => ({
@@ -105,17 +95,11 @@ function loadData(): SavedData {
         color: normalizeListColor(list.color)
       }))
 
-    const activeListId = lists.some(
-      (list) => list.id === stored.activeListId
-    )
+    const activeListId = lists.some((list) => list.id === stored.activeListId)
       ? stored.activeListId!
       : (lists[0]?.id ?? null)
 
-    return {
-      version: 2,
-      lists,
-      activeListId
-    }
+    return { version: 2, lists, activeListId }
   } catch {
     return empty
   }
@@ -130,39 +114,64 @@ export const useWishlistStore = defineStore('wishlists', () => {
   const activeListId = ref<string | null>(saved.activeListId)
 
   const activeList = computed(() => {
-    return (
-      wishlists.value.find((list) => list.id === activeListId.value) ??
-      wishlists.value[0] ??
-      null
-    )
+    return wishlists.value.find((list) => list.id === activeListId.value)
+      ?? wishlists.value[0]
+      ?? null
   })
 
   const listCount = computed(() => wishlists.value.length)
 
   function selectList(id: string) {
-    if (wishlists.value.some((list) => list.id === id)) {
-      activeListId.value = id
-    }
+    if (wishlists.value.some((list) => list.id === id)) activeListId.value = id
   }
 
   function createList(input: NewWishlist) {
     const name = input.name.trim().slice(0, 60)
-
-    if (!name) {
-      return
-    }
+    if (!name) return
 
     const list: Wishlist = {
       id: crypto.randomUUID(),
       name,
       description: input.description.trim().slice(0, 160),
       icon: input.icon.trim() || '📌',
-      color: normalizeListColor(input.color || DEFAULT_LIST_COLOR),
+      color: normalizeListColor(input.color),
       items: []
     }
 
     wishlists.value.push(list)
     activeListId.value = list.id
+  }
+
+  /* === ITEMS === */
+
+  function addWish(listId: string, input: NewWish): boolean {
+    const list = wishlists.value.find((list) => list.id === listId)
+    if (!list) return false
+
+    const name = input.name.trim().slice(0, 120)
+    if (!name) return false
+
+    const url = normalizeWebUrl(input.url)
+    const imageUrl = normalizeWebUrl(input.imageUrl)
+    if (url === null || imageUrl === null) return false
+
+    const colors: WishColor[] = ['blue', 'gold', 'mint', 'peach', 'lilac']
+    const color = colors[list.items.length % colors.length]!
+
+    const wish: Wish = {
+      id: crypto.randomUUID(),
+      name,
+      description: input.description.trim().slice(0, 1000),
+      price: input.price.trim().slice(0, 40),
+      sticker: '',
+      icon: input.icon.trim() || '📦',
+      color,
+      url,
+      imageUrl
+    }
+
+    list.items.push(wish)
+    return true
   }
 
   /* === AUTOSAVE === */
@@ -191,6 +200,7 @@ export const useWishlistStore = defineStore('wishlists', () => {
     activeList,
     listCount,
     selectList,
-    createList
+    createList,
+    addWish
   }
 })
