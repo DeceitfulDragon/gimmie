@@ -3,11 +3,11 @@ import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import NewWishlistForm from '@/components/NewWishlistForm.vue'
-import NewWishForm from '@/components/NewWishForm.vue'
+import WishForm from '@/components/WishForm.vue'
+import WishCard from '@/components/WishCard.vue'
 
 import { useWishlistStore } from '@/stores/wishlists'
 import { getTabTextColor } from '@/utils/listColors'
-import { normalizeWebUrl } from '@/utils/urls'
 
 import type { NewWishlist, NewWish } from '@/stores/wishlists'
 
@@ -71,7 +71,6 @@ const wishlistStore = useWishlistStore()
 const { wishlists, activeList } = storeToRefs(wishlistStore)
 
 const showNewList = ref(false)
-const showNewWish = ref(false)
 
 const listCount = computed(() => String(wishlists.value.length).padStart(2, '0'))
 
@@ -80,30 +79,81 @@ const pageNumber = computed(() => {
   return String(index + 1).padStart(2, '0')
 })
 
+function toggleNewList() {
+  showNewList.value = !showNewList.value
+  if (showNewList.value) closeWishForm()
+}
+
 function createList(input: NewWishlist) {
   wishlistStore.createList(input)
   showNewList.value = false
-  showNewWish.value = false
+  closeWishForm()
 }
 
 function selectList(id: string) {
   wishlistStore.selectList(id)
-  showNewWish.value = false
+  closeWishForm()
 }
 
-/* === ITEMS === */
+/* === ITEM FORM === */
 
-const failedImages = ref<string[]>([])
+const showWishForm = ref(false)
+const editingWishId = ref<string | null>(null)
+const saveError = ref('')
 
-function createWish(input: NewWish) {
+const editingWish = computed(() => {
+  if (!editingWishId.value) return null
+  return activeList.value?.items.find((item) => item.id === editingWishId.value) ?? null
+})
+
+function closeWishForm() {
+  showWishForm.value = false
+  editingWishId.value = null
+  saveError.value = ''
+}
+
+function toggleWishForm() {
+  if (showWishForm.value) {
+    closeWishForm()
+    return
+  }
+
+  editingWishId.value = null
+  showWishForm.value = true
+  showNewList.value = false
+  saveError.value = ''
+}
+
+function editWish(id: string) {
+  if (!activeList.value?.items.some((item) => item.id === id)) return
+
+  editingWishId.value = id
+  showWishForm.value = true
+  showNewList.value = false
+  saveError.value = ''
+}
+
+function saveWish(input: NewWish) {
   if (!activeList.value) return
 
-  const added = wishlistStore.addWish(activeList.value.id, input)
-  if (added) showNewWish.value = false
+  const listId = activeList.value.id
+
+  const saved = editingWishId.value
+    ? wishlistStore.updateWish(listId, editingWishId.value, input)
+    : wishlistStore.addWish(listId, input)
+
+  if (saved) {
+    closeWishForm()
+  } else {
+    saveError.value = 'Could not save this item. Check the fields and try again.'
+  }
 }
 
-function onImageError(id: string) {
-  if (!failedImages.value.includes(id)) failedImages.value.push(id)
+function removeWish(id: string) {
+  if (!activeList.value) return
+
+  const removed = wishlistStore.removeWish(activeList.value.id, id)
+  if (removed && editingWishId.value === id) closeWishForm()
 }
 </script>
 
@@ -157,7 +207,7 @@ function onImageError(id: string) {
             <span>MY LISTS / {{ listCount }}</span>
 
             <button type="button" class="theme-toggle" :aria-expanded="showNewList"
-              :aria-controls="showNewList ? 'new-wishlist-form' : undefined" @click="showNewList = !showNewList">
+              :aria-controls="showNewList ? 'new-wishlist-form' : undefined" @click="toggleNewList">
               {{ showNewList ? 'Cancel' : '+ New list' }}
             </button>
           </div>
@@ -190,9 +240,9 @@ function onImageError(id: string) {
                 <div class="page-actions">
                   <span class="page-number">PAGE {{ pageNumber }}</span>
 
-                  <button type="button" class="add-item-button" :aria-expanded="showNewWish"
-                    :aria-controls="showNewWish ? 'new-wish-form' : undefined" @click="showNewWish = !showNewWish">
-                    {{ showNewWish ? 'Cancel' : '+ Add item' }}
+                  <button type="button" class="add-item-button" :aria-expanded="showWishForm"
+                    :aria-controls="showWishForm ? 'wish-form' : undefined" @click="toggleWishForm">
+                    {{ showWishForm ? 'Cancel' : '+ Add item' }}
                   </button>
                 </div>
               </div>
@@ -207,44 +257,16 @@ function onImageError(id: string) {
                 <span>{{ activeList.name }}</span>
               </div>
 
-              <NewWishForm v-if="showNewWish" :key="activeList.id" :dark="theme === 'dark'" @create="createWish"
-                @cancel="showNewWish = false" />
+              <WishForm v-if="showWishForm" :key="`${activeList.id}-${editingWishId ?? 'new'}`" :dark="theme === 'dark'"
+                :wish="editingWish" @save="saveWish" @cancel="closeWishForm" />
+
+              <p v-if="saveError" class="save-error" role="alert">
+                {{ saveError }}
+              </p>
 
               <div v-if="activeList.items.length > 0" class="wish-grid">
-                <article v-for="wish in activeList.items" :key="wish.id" class="wish-card">
-                  <div class="wish-art" :class="`wish-art--${wish.color}`">
-                    <img v-if="normalizeWebUrl(wish.imageUrl) && !failedImages.includes(wish.id)" class="wish-image"
-                      :src="normalizeWebUrl(wish.imageUrl) || undefined" :alt="wish.name" loading="lazy"
-                      @error="onImageError(wish.id)" />
-
-                    <span v-else class="wish-illustration" aria-hidden="true">
-                      {{ wish.icon }}
-                    </span>
-
-                    <span v-if="wish.sticker" class="wish-sticker">
-                      {{ wish.sticker }}
-                    </span>
-                  </div>
-
-                  <div class="wish-details">
-                    <h3>{{ wish.name }}</h3>
-
-                    <p v-if="wish.description" class="wish-description">
-                      {{ wish.description }}
-                    </p>
-
-                    <div v-if="wish.price || normalizeWebUrl(wish.url)" class="wish-footer">
-                      <span v-if="wish.price" class="wish-price">
-                        {{ wish.price }}
-                      </span>
-
-                      <a v-if="normalizeWebUrl(wish.url)" class="wish-link"
-                        :href="normalizeWebUrl(wish.url) || undefined" target="_blank" rel="noopener noreferrer">
-                        View item ↗
-                      </a>
-                    </div>
-                  </div>
-                </article>
+                <WishCard v-for="wish in activeList.items" :key="wish.id" :wish="wish" @edit="editWish(wish.id)"
+                  @remove="removeWish(wish.id)" />
               </div>
 
               <div v-else class="list-empty">
@@ -324,48 +346,13 @@ function onImageError(id: string) {
   font-size: 13px;
 }
 
-/* === ITEM IMAGES === */
+/* === ERRORS === */
 
-.wish-image {
-  position: relative;
-  z-index: 1;
-
-  display: block;
-  width: 100%;
-  height: 100%;
-
-  object-fit: contain;
-}
-
-/* === ITEM LINKS === */
-
-.wish-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-
-  margin-top: 14px;
-  padding-top: 11px;
-  border-top: 1px solid var(--border);
-}
-
-.wish-footer .wish-price {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.wish-link {
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.wish-link:hover {
-  text-decoration: underline;
+.save-error {
+  margin: 12px 0;
+  color: #c04d49;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 /* === MOBILE === */

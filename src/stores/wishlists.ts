@@ -105,6 +105,25 @@ function loadData(): SavedData {
   }
 }
 
+/* === ITEM VALIDATION === */
+
+function cleanWishInput(input: NewWish) {
+  const name = input.name.trim().slice(0, 120)
+  const url = normalizeWebUrl(input.url)
+  const imageUrl = normalizeWebUrl(input.imageUrl)
+
+  if (!name || url === null || imageUrl === null) return null
+
+  return {
+    name,
+    description: input.description.trim().slice(0, 1000),
+    price: input.price.trim().slice(0, 40),
+    icon: input.icon.trim() || '📦',
+    url,
+    imageUrl
+  }
+}
+
 /* === WISHLISTS === */
 
 export const useWishlistStore = defineStore('wishlists', () => {
@@ -146,31 +165,40 @@ export const useWishlistStore = defineStore('wishlists', () => {
 
   function addWish(listId: string, input: NewWish): boolean {
     const list = wishlists.value.find((list) => list.id === listId)
-    if (!list) return false
-
-    const name = input.name.trim().slice(0, 120)
-    if (!name) return false
-
-    const url = normalizeWebUrl(input.url)
-    const imageUrl = normalizeWebUrl(input.imageUrl)
-    if (url === null || imageUrl === null) return false
+    const fields = cleanWishInput(input)
+    if (!list || !fields) return false
 
     const colors: WishColor[] = ['blue', 'gold', 'mint', 'peach', 'lilac']
-    const color = colors[list.items.length % colors.length]!
 
-    const wish: Wish = {
+    list.items.push({
       id: crypto.randomUUID(),
-      name,
-      description: input.description.trim().slice(0, 1000),
-      price: input.price.trim().slice(0, 40),
+      ...fields,
       sticker: '',
-      icon: input.icon.trim() || '📦',
-      color,
-      url,
-      imageUrl
-    }
+      color: colors[list.items.length % colors.length]!
+    })
 
-    list.items.push(wish)
+    return true
+  }
+
+  function updateWish(listId: string, wishId: string, input: NewWish): boolean {
+    const list = wishlists.value.find((list) => list.id === listId)
+    const wish = list?.items.find((item) => item.id === wishId)
+    const fields = cleanWishInput(input)
+
+    if (!wish || !fields) return false
+
+    Object.assign(wish, fields)
+    return true
+  }
+
+  function removeWish(listId: string, wishId: string): boolean {
+    const list = wishlists.value.find((list) => list.id === listId)
+    if (!list) return false
+
+    const index = list.items.findIndex((item) => item.id === wishId)
+    if (index === -1) return false
+
+    list.items.splice(index, 1)
     return true
   }
 
@@ -201,6 +229,8 @@ export const useWishlistStore = defineStore('wishlists', () => {
     listCount,
     selectList,
     createList,
-    addWish
+    addWish,
+    updateWish,
+    removeWish
   }
 })
