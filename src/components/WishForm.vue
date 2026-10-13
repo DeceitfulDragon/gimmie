@@ -4,29 +4,31 @@ import { onMounted, ref } from 'vue'
 import EmojiPicker from './EmojiPicker.vue'
 import { normalizeWebUrl } from '@/utils/urls'
 
-import type { NewWish } from '@/stores/wishlists'
+import type { NewWish, Wish } from '@/stores/wishlists'
 
 /* === PROPS === */
 
-defineProps<{
+const props = defineProps<{
   dark: boolean
+  wish?: Wish | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'create', wish: NewWish): void
+  (e: 'save', wish: NewWish): void
   (e: 'cancel'): void
 }>()
 
 /* === FORM === */
 
+const editing = !!props.wish
 const nameInput = ref<HTMLInputElement | null>(null)
 
-const name = ref('')
-const price = ref('')
-const url = ref('')
-const imageUrl = ref('')
-const description = ref('')
-const icon = ref('📦')
+const name = ref(props.wish?.name ?? '')
+const price = ref(props.wish?.price ?? '')
+const url = ref(props.wish?.url ?? '')
+const imageUrl = ref(props.wish?.imageUrl ?? '')
+const description = ref(props.wish?.description ?? '')
+const icon = ref(props.wish?.icon ?? '📦')
 
 const errorMessage = ref('')
 const showEmojiPicker = ref(false)
@@ -68,7 +70,7 @@ function submit() {
     return
   }
 
-  emit('create', {
+  emit('save', {
     name: name.value,
     price: price.value,
     description: description.value,
@@ -82,11 +84,11 @@ onMounted(() => nameInput.value?.focus())
 </script>
 
 <template>
-  <form id="new-wish-form" class="new-wish" @submit.prevent="submit" @keydown.esc.stop.prevent="handleEscape">
+  <form id="wish-form" class="wish-form" @submit.prevent="submit" @keydown.esc.stop.prevent="handleEscape">
     <div class="form-header">
       <div>
-        <span class="form-label">NEW ITEM</span>
-        <h3>Add a thing</h3>
+        <span class="form-label">{{ editing ? 'EDIT ITEM' : 'NEW ITEM' }}</span>
+        <h3>{{ editing ? 'Edit item' : 'Add a thing' }}</h3>
       </div>
 
       <button type="button" class="close-button" aria-label="Cancel" @click="emit('cancel')">
@@ -136,7 +138,7 @@ onMounted(() => nameInput.value?.focus())
     <fieldset class="emoji-field">
       <legend>Icon</legend>
 
-      <p class="field-help">Used when you haven't added a photo</p>
+      <p class="field-help">Shown when there's no photo</p>
 
       <div class="emoji-options">
         <button v-for="option in quickEmojis" :key="option" type="button" class="emoji-choice"
@@ -164,7 +166,7 @@ onMounted(() => nameInput.value?.focus())
       </button>
 
       <button type="submit" class="form-button form-button--save">
-        Add item
+        {{ editing ? 'Save changes' : 'Add item' }}
       </button>
     </div>
   </form>
@@ -173,7 +175,7 @@ onMounted(() => nameInput.value?.focus())
 <style scoped>
 /* === FORM === */
 
-.new-wish {
+.wish-form {
   margin: 22px 0;
   padding: 24px;
 
@@ -383,7 +385,7 @@ onMounted(() => nameInput.value?.focus())
 /* === MOBILE === */
 
 @media (max-width: 600px) {
-  .new-wish {
+  .wish-form {
     padding: 17px;
   }
 
