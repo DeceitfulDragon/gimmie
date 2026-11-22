@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
-import NewWishlistForm from '@/components/NewWishlistForm.vue'
+import WishlistForm from '@/components/WishlistForm.vue'
 import WishForm from '@/components/WishForm.vue'
 import WishCard from '@/components/WishCard.vue'
 
@@ -45,7 +45,7 @@ watch(
       console.warn('Could not save theme preference')
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 /* === NOTES === */
@@ -60,7 +60,7 @@ const notes = [
   'Check the measurements first.',
   'That can stay on the list.',
   'Maybe ask for it for my birthday.',
-  'One thing at a time.'
+  'One thing at a time.',
 ]
 
 const currentNote = notes[Math.floor(Math.random() * notes.length)]!
@@ -70,7 +70,10 @@ const currentNote = notes[Math.floor(Math.random() * notes.length)]!
 const wishlistStore = useWishlistStore()
 const { wishlists, activeList } = storeToRefs(wishlistStore)
 
-const showNewList = ref(false)
+const showListForm = ref(false)
+const editingListId = ref<string | null>(null)
+const listError = ref('')
+const confirmingListDelete = ref(false)
 
 const listCount = computed(() => String(wishlists.value.length).padStart(2, '0'))
 
@@ -79,23 +82,82 @@ const pageNumber = computed(() => {
   return String(index + 1).padStart(2, '0')
 })
 
-function toggleNewList() {
-  showNewList.value = !showNewList.value
-  if (showNewList.value) closeWishForm()
+const editingList = computed(() => {
+  return wishlists.value.find((list) => list.id === editingListId.value) ?? null
+})
+
+function closeListForm() {
+  showListForm.value = false
+  editingListId.value = null
+  listError.value = ''
 }
 
-function createList(input: NewWishlist) {
-  wishlistStore.createList(input)
-  showNewList.value = false
+function toggleNewList() {
+  if (showListForm.value && !editingListId.value) {
+    closeListForm()
+    return
+  }
+
   closeWishForm()
+  confirmingListDelete.value = false
+  editingListId.value = null
+  showListForm.value = true
+}
+
+function editList() {
+  if (!activeList.value) return
+
+  closeWishForm()
+  confirmingListDelete.value = false
+  editingListId.value = activeList.value.id
+  showListForm.value = true
+  listError.value = ''
+}
+
+function saveList(input: NewWishlist) {
+  if (editingListId.value) {
+    if (!wishlistStore.updateList(editingListId.value, input)) {
+      listError.value = 'Could not save this list'
+      return
+    }
+  } else {
+    wishlistStore.createList(input)
+  }
+
+  closeListForm()
 }
 
 function selectList(id: string) {
   wishlistStore.selectList(id)
+  closeListForm()
   closeWishForm()
+  confirmingListDelete.value = false
 }
 
-/* === ITEM FORM === */
+/* === DELETE LIST === */
+
+function toggleListDelete() {
+  if (!activeList.value) return
+
+  confirmingListDelete.value = !confirmingListDelete.value
+
+  if (confirmingListDelete.value) {
+    closeListForm()
+    closeWishForm()
+  }
+}
+
+function deleteList() {
+  if (!activeList.value || !confirmingListDelete.value) return
+
+  if (wishlistStore.removeList(activeList.value.id)) {
+    confirmingListDelete.value = false
+    closeListForm()
+    closeWishForm()
+  }
+}
+
+/* === ITEMS === */
 
 const showWishForm = ref(false)
 const editingWishId = ref<string | null>(null)
@@ -118,18 +180,19 @@ function toggleWishForm() {
     return
   }
 
+  closeListForm()
+  confirmingListDelete.value = false
   editingWishId.value = null
   showWishForm.value = true
-  showNewList.value = false
-  saveError.value = ''
 }
 
 function editWish(id: string) {
   if (!activeList.value?.items.some((item) => item.id === id)) return
 
+  closeListForm()
+  confirmingListDelete.value = false
   editingWishId.value = id
   showWishForm.value = true
-  showNewList.value = false
   saveError.value = ''
 }
 
@@ -162,17 +225,17 @@ function removeWish(id: string) {
     <div class="page-container">
       <header class="site-header">
         <div class="brand">
-          <div class="brand-logo">
-            gimmie<span>.</span>
-          </div>
-
-          <p class="brand-caption">
-            want it? list it.
-          </p>
+          <div class="brand-logo">gimmie<span>.</span></div>
+          <p class="brand-caption">want it? list it.</p>
         </div>
 
-        <button type="button" class="theme-toggle" :aria-pressed="theme === 'dark'"
-          :aria-label="theme === 'light' ? 'Switch to After Hours' : 'Switch to Daytime'" @click="toggleTheme">
+        <button
+          type="button"
+          class="theme-toggle"
+          :aria-pressed="theme === 'dark'"
+          :aria-label="theme === 'light' ? 'Switch to After Hours' : 'Switch to Daytime'"
+          @click="toggleTheme"
+        >
           <span class="theme-icon" aria-hidden="true">
             {{ theme === 'light' ? '☾' : '☀' }}
           </span>
@@ -185,14 +248,10 @@ function removeWish(id: string) {
         <section class="masthead">
           <div>
             <span class="overline">YOUR LISTS</span>
-
-            <h1>
-              stuff <span>i want.</span>
-            </h1>
+            <h1>stuff <span>i want.</span></h1>
 
             <p class="masthead-description">
-              Things I might buy, things I probably won't.
-              At least they're all in one place.
+              Things I might buy, things I probably won't. At least they're all in one place.
             </p>
           </div>
 
@@ -206,21 +265,39 @@ function removeWish(id: string) {
           <div class="collection-label">
             <span>MY LISTS / {{ listCount }}</span>
 
-            <button type="button" class="theme-toggle" :aria-expanded="showNewList"
-              :aria-controls="showNewList ? 'new-wishlist-form' : undefined" @click="toggleNewList">
-              {{ showNewList ? 'Cancel' : '+ New list' }}
+            <button
+              type="button"
+              class="theme-toggle"
+              :aria-expanded="showListForm && !editingListId"
+              :aria-controls="showListForm && !editingListId ? 'wishlist-form' : undefined"
+              @click="toggleNewList"
+            >
+              {{ showListForm && !editingListId ? 'Cancel' : '+ New list' }}
             </button>
           </div>
 
-          <NewWishlistForm v-if="showNewList" :dark="theme === 'dark'" @create="createList"
-            @cancel="showNewList = false" />
+          <WishlistForm
+            v-if="showListForm && !editingListId"
+            key="new"
+            :dark="theme === 'dark'"
+            @save="saveList"
+            @cancel="closeListForm"
+          />
 
           <template v-if="activeList">
             <nav class="list-tabs" aria-label="Wishlists">
-              <button v-for="list in wishlists" :key="list.id" type="button" class="list-tab" :style="{
-                backgroundColor: list.color,
-                color: getTabTextColor(list.color)
-              }" :aria-pressed="activeList.id === list.id" @click="selectList(list.id)">
+              <button
+                v-for="list in wishlists"
+                :key="list.id"
+                type="button"
+                class="list-tab"
+                :style="{
+                  backgroundColor: list.color,
+                  color: getTabTextColor(list.color),
+                }"
+                :aria-pressed="activeList.id === list.id"
+                @click="selectList(list.id)"
+              >
                 <span aria-hidden="true">{{ list.icon }}</span>
                 {{ list.name }}
               </button>
@@ -240,8 +317,13 @@ function removeWish(id: string) {
                 <div class="page-actions">
                   <span class="page-number">PAGE {{ pageNumber }}</span>
 
-                  <button type="button" class="add-item-button" :aria-expanded="showWishForm"
-                    :aria-controls="showWishForm ? 'wish-form' : undefined" @click="toggleWishForm">
+                  <button
+                    type="button"
+                    class="add-item-button"
+                    :aria-expanded="showWishForm"
+                    :aria-controls="showWishForm ? 'wish-form' : undefined"
+                    @click="toggleWishForm"
+                  >
                     {{ showWishForm ? 'Cancel' : '+ Add item' }}
                   </button>
                 </div>
@@ -254,19 +336,86 @@ function removeWish(id: string) {
                   on this list
                 </span>
 
-                <span>{{ activeList.name }}</span>
+                <div class="list-tools">
+                  <button type="button" class="list-tool" @click="editList">Edit list</button>
+
+                  <button
+                    type="button"
+                    class="list-tool list-tool--delete"
+                    :aria-expanded="confirmingListDelete"
+                    :aria-controls="confirmingListDelete ? 'list-delete-confirmation' : undefined"
+                    @click="toggleListDelete"
+                  >
+                    Delete list
+                  </button>
+                </div>
               </div>
 
-              <WishForm v-if="showWishForm" :key="`${activeList.id}-${editingWishId ?? 'new'}`" :dark="theme === 'dark'"
-                :wish="editingWish" @save="saveWish" @cancel="closeWishForm" />
+              <WishlistForm
+                v-if="showListForm && editingListId === activeList.id"
+                :key="activeList.id"
+                :dark="theme === 'dark'"
+                :wishlist="editingList"
+                @save="saveList"
+                @cancel="closeListForm"
+              />
+
+              <p v-if="listError" class="save-error" role="alert">
+                {{ listError }}
+              </p>
+
+              <section
+                v-if="confirmingListDelete"
+                id="list-delete-confirmation"
+                class="list-delete-confirm"
+                aria-label="Delete wishlist confirmation"
+              >
+                <h3>Delete "{{ activeList.name }}"?</h3>
+
+                <p v-if="activeList.items.length">
+                  This also deletes all {{ activeList.items.length }}
+                  {{ activeList.items.length === 1 ? 'item' : 'items' }}
+                  inside it. You can't undo this.
+                </p>
+
+                <p v-else>This list will be removed from your browser. You can't undo this.</p>
+
+                <div class="delete-actions">
+                  <button
+                    type="button"
+                    class="keep-list-button"
+                    @click="confirmingListDelete = false"
+                  >
+                    Keep list
+                  </button>
+
+                  <button type="button" class="delete-list-button" @click="deleteList">
+                    Delete list
+                  </button>
+                </div>
+              </section>
+
+              <WishForm
+                v-if="showWishForm"
+                :key="`${activeList.id}-${editingWishId ?? 'new'}`"
+                :dark="theme === 'dark'"
+                :wish="editingWish"
+                @save="saveWish"
+                @cancel="closeWishForm"
+              />
 
               <p v-if="saveError" class="save-error" role="alert">
                 {{ saveError }}
               </p>
 
               <div v-if="activeList.items.length > 0" class="wish-grid">
-                <WishCard v-for="wish in activeList.items" :key="wish.id" :wish="wish" @edit="editWish(wish.id)"
-                  @remove="removeWish(wish.id)" />
+                <WishCard
+                  v-for="wish in activeList.items"
+                  :key="wish.id"
+                  :wish="wish"
+                  @edit="editWish(wish.id)"
+                  @remove="removeWish(wish.id)"
+                />
               </div>
 
               <div v-else class="list-empty">
@@ -293,9 +442,7 @@ function removeWish(id: string) {
         </section>
       </main>
 
-      <footer class="site-footer">
-        gimmie. want it? list it.
-      </footer>
+      <footer class="site-footer">gimmie. want it? list it.</footer>
     </div>
   </div>
 </template>
@@ -326,6 +473,91 @@ function removeWish(id: string) {
 
 .add-item-button:hover {
   filter: brightness(1.1);
+}
+
+/* === LIST CONTROLS === */
+
+.list-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.list-tool {
+  padding: 4px 0;
+
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.list-tool:hover {
+  text-decoration: underline;
+}
+
+.list-tool--delete {
+  color: var(--muted);
+}
+
+/* === DELETE CONFIRMATION === */
+
+.list-delete-confirm {
+  margin: 4px 0 26px;
+  padding: 20px;
+
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 4px solid #b65b56;
+  border-radius: 4px;
+}
+
+.list-delete-confirm h3 {
+  margin-bottom: 8px;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.list-delete-confirm p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 19px;
+}
+
+.delete-actions button {
+  min-height: 39px;
+  padding: 9px 15px;
+
+  border: 1px solid var(--border);
+  border-radius: 4px;
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.keep-list-button {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.delete-list-button {
+  color: #ffffff;
+  background: #a74949;
+  border-color: #a74949 !important;
+}
+
+.delete-actions button:hover {
+  filter: brightness(1.08);
 }
 
 /* === EMPTY LIST === */
@@ -365,6 +597,15 @@ function removeWish(id: string) {
   .page-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .page-meta {
+    flex-wrap: wrap;
+  }
+
+  .list-tools {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 </style>
