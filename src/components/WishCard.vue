@@ -8,6 +8,7 @@ import type { Wish } from '@/stores/wishlists'
 
 const props = defineProps<{
   wish: Wish
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -23,7 +24,7 @@ const imageUrl = computed(() => normalizeWebUrl(props.wish.imageUrl) || '')
 const productUrl = computed(() => normalizeWebUrl(props.wish.url) || '')
 const showImage = computed(() => !!imageUrl.value && failedImage.value !== imageUrl.value)
 
-/* === DELETE === */
+/* === REMOVE === */
 
 const confirmRemove = ref(false)
 </script>
@@ -31,8 +32,15 @@ const confirmRemove = ref(false)
 <template>
   <article class="wish-card" @keydown.esc="confirmRemove = false">
     <div class="wish-art" :class="`wish-art--${wish.color}`">
-      <img v-if="showImage" class="wish-image" :src="imageUrl" alt="" loading="lazy" decoding="async"
-        @error="failedImage = imageUrl" />
+      <img
+        v-if="showImage"
+        class="wish-image"
+        :src="imageUrl"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        @error="failedImage = imageUrl"
+      />
 
       <span v-else class="wish-illustration" aria-hidden="true">
         {{ wish.icon }}
@@ -51,38 +59,44 @@ const confirmRemove = ref(false)
       </p>
 
       <div v-if="wish.price || productUrl" class="wish-footer">
-        <span v-if="wish.price" class="wish-price">
-          {{ wish.price }}
-        </span>
+        <span v-if="wish.price" class="wish-price">{{ wish.price }}</span>
 
-        <a v-if="productUrl" class="wish-link" :href="productUrl" target="_blank" rel="noopener noreferrer">
+        <a
+          v-if="productUrl"
+          class="wish-link"
+          :href="productUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           View item ↗
         </a>
       </div>
 
-      <div v-if="!confirmRemove" class="card-actions">
-        <button type="button" class="card-button" @click="emit('edit')">
-          Edit
-        </button>
+      <template v-if="!readOnly">
+        <div v-if="!confirmRemove" class="card-actions">
+          <button type="button" class="card-button" @click="emit('edit')">Edit</button>
 
-        <button type="button" class="card-button card-button--remove" @click="confirmRemove = true">
-          Remove
-        </button>
-      </div>
-
-      <div v-else class="remove-confirm">
-        <p>Remove this item?</p>
-
-        <div class="remove-buttons">
-          <button type="button" class="keep-button" @click="confirmRemove = false">
-            Keep it
-          </button>
-
-          <button type="button" class="delete-button" @click="emit('remove')">
+          <button
+            type="button"
+            class="card-button card-button--remove"
+            @click="confirmRemove = true"
+          >
             Remove
           </button>
         </div>
-      </div>
+
+        <div v-else class="remove-confirm">
+          <p>Remove this item?</p>
+
+          <div class="remove-buttons">
+            <button type="button" class="keep-button" @click="confirmRemove = false">
+              Keep it
+            </button>
+
+            <button type="button" class="delete-button" @click="emit('remove')">Remove</button>
+          </div>
+        </div>
+      </template>
     </div>
   </article>
 </template>
