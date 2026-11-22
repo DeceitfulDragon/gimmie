@@ -51,9 +51,7 @@ interface SavedData {
   activeListId: string | null
 }
 
-type StoredWishlist = Omit<Wishlist, 'color'> & {
-  color: unknown
-}
+type StoredWishlist = Omit<Wishlist, 'color'> & { color: unknown }
 
 /* === STORAGE === */
 
@@ -90,10 +88,7 @@ function loadData(): SavedData {
     const records: unknown[] = stored.lists
     const lists: Wishlist[] = records
       .filter(isWishlist)
-      .map((list) => ({
-        ...list,
-        color: normalizeListColor(list.color)
-      }))
+      .map((list) => ({ ...list, color: normalizeListColor(list.color) }))
 
     const activeListId = lists.some((list) => list.id === stored.activeListId)
       ? stored.activeListId!
@@ -161,6 +156,33 @@ export const useWishlistStore = defineStore('wishlists', () => {
     activeListId.value = list.id
   }
 
+  function updateList(id: string, input: NewWishlist): boolean {
+    const list = wishlists.value.find((list) => list.id === id)
+    const name = input.name.trim().slice(0, 60)
+    if (!list || !name) return false
+
+    list.name = name
+    list.description = input.description.trim().slice(0, 160)
+    list.icon = input.icon.trim() || '📌'
+    list.color = normalizeListColor(input.color)
+
+    return true
+  }
+
+  function removeList(id: string): boolean {
+    const index = wishlists.value.findIndex((list) => list.id === id)
+    if (index === -1) return false
+
+    wishlists.value.splice(index, 1)
+
+    if (activeListId.value === id) {
+      const next = Math.min(index, wishlists.value.length - 1)
+      activeListId.value = wishlists.value[next]?.id ?? null
+    }
+
+    return true
+  }
+
   /* === ITEMS === */
 
   function addWish(listId: string, input: NewWish): boolean {
@@ -184,7 +206,6 @@ export const useWishlistStore = defineStore('wishlists', () => {
     const list = wishlists.value.find((list) => list.id === listId)
     const wish = list?.items.find((item) => item.id === wishId)
     const fields = cleanWishInput(input)
-
     if (!wish || !fields) return false
 
     Object.assign(wish, fields)
@@ -229,6 +250,8 @@ export const useWishlistStore = defineStore('wishlists', () => {
     listCount,
     selectList,
     createList,
+    updateList,
+    removeList,
     addWish,
     updateWish,
     removeWish
