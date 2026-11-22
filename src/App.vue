@@ -229,7 +229,7 @@ function removeWish(id: string) {
   if (removed) closeSharePanel()
 }
 
-/* === SHARE A LIST === */
+/* === SHARING === */
 
 const shareOpen = ref(false)
 const shareBusy = ref(false)
@@ -282,7 +282,7 @@ async function copyShareLink() {
   }
 }
 
-/* === OPEN SHARED LINKS === */
+/* === SHARED LINKS === */
 
 const sharedMode = ref(hasSharedLink(window.location.hash))
 const sharedList = ref<Wishlist | null>(null)
@@ -351,7 +351,6 @@ onUnmounted(() => window.removeEventListener('hashchange', onHashChange))
         </button>
       </header>
 
-      <!-- Shared wishlist -->
       <main v-if="sharedMode" class="shared-view">
         <template v-if="sharedList">
           <div class="shared-heading">
@@ -405,37 +404,30 @@ onUnmounted(() => window.removeEventListener('hashchange', onHashChange))
         <button type="button" class="back-button" @click="leaveSharedPage">Back to my lists</button>
       </main>
 
-      <!-- My wishlists -->
       <main v-else>
-        <section class="masthead">
-          <div>
-            <span class="overline">YOUR LISTS</span>
-            <h1>stuff <span>i want.</span></h1>
-
-            <p class="masthead-description">
-              Things I might buy, things I probably won't. At least they're all in one place.
-            </p>
-          </div>
-
-          <aside class="paper-note">
-            <div class="paper-note-title">NOTE TO SELF</div>
-            <p>{{ currentNote }}</p>
-          </aside>
-        </section>
-
         <section class="collection">
-          <div class="collection-label">
-            <span>MY LISTS / {{ listCount }}</span>
+          <div class="collection-header">
+            <div class="collection-heading">
+              <div class="collection-title">
+                <h1>My lists</h1>
+                <span class="list-count">{{ listCount }}</span>
+              </div>
 
-            <button
-              type="button"
-              class="theme-toggle"
-              :aria-expanded="showListForm && !editingListId"
-              :aria-controls="showListForm && !editingListId ? 'wishlist-form' : undefined"
-              @click="toggleNewList"
-            >
-              {{ showListForm && !editingListId ? 'Cancel' : '+ New list' }}
-            </button>
+              <button
+                type="button"
+                class="theme-toggle new-list-button"
+                :aria-expanded="showListForm && !editingListId"
+                :aria-controls="showListForm && !editingListId ? 'wishlist-form' : undefined"
+                @click="toggleNewList"
+              >
+                {{ showListForm && !editingListId ? 'Cancel' : '+ New list' }}
+              </button>
+            </div>
+
+            <aside class="paper-note" aria-label="Note to self">
+              <div class="paper-note-title">NOTE TO SELF</div>
+              <p>{{ currentNote }}</p>
+            </aside>
           </div>
 
           <WishlistForm
@@ -470,10 +462,7 @@ onUnmounted(() => window.removeEventListener('hashchange', onHashChange))
                 <div>
                   <span class="overline">MY WISHLIST</span>
                   <h2>{{ activeList.name }}</h2>
-
-                  <p v-if="activeList.description">
-                    {{ activeList.description }}
-                  </p>
+                  <p v-if="activeList.description">{{ activeList.description }}</p>
                 </div>
 
                 <div class="page-actions">
@@ -615,9 +604,8 @@ onUnmounted(() => window.removeEventListener('hashchange', onHashChange))
               </div>
 
               <div v-else class="list-empty">
-                <span class="overline">EMPTY PAGE</span>
-                <h3>Nothing here yet.</h3>
-                <p>Add something when you're ready.</p>
+                <h3>Nothing here yet</h3>
+                <p>Add something when you're ready!</p>
               </div>
             </div>
           </template>
@@ -630,9 +618,8 @@ onUnmounted(() => window.removeEventListener('hashchange', onHashChange))
                 <span></span>
               </div>
 
-              <span class="overline">FIRST PAGE</span>
-              <h2>Nothing here yet.</h2>
-              <p>Make a list to get started.</p>
+              <h2>Nothing here yet</h2>
+              <p>Make a list to get started!</p>
             </div>
           </div>
         </section>

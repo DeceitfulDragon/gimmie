@@ -102,16 +102,30 @@ const confirmRemove = ref(false)
 </template>
 
 <style scoped>
-/* === IMAGE === */
+/* === IMAGES === */
+
+.wish-art {
+  position: relative;
+  height: 220px;
+  isolation: isolate;
+}
+
+.wish-art::before {
+  z-index: 2;
+}
 
 .wish-image {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 1;
 
   display: block;
   width: 100%;
   height: 100%;
+  padding: 12px;
+
   object-fit: contain;
+  object-position: center;
 }
 
 /* === LINKS === */
@@ -224,5 +238,23 @@ const confirmRemove = ref(false)
 
 .remove-buttons button:hover {
   filter: brightness(1.08);
+}
+
+/* === MOBILE === */
+
+@media (max-width: 650px) {
+  .wish-art {
+    height: 170px;
+  }
+
+  .wish-image {
+    padding: 9px;
+  }
+}
+
+@media (max-width: 420px) {
+  .wish-art {
+    height: 210px;
+  }
 }
 </style>
